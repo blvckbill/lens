@@ -1,6 +1,7 @@
 package search
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -8,16 +9,24 @@ import (
 )
 
 func Search_file(arg string) {
-	file, err := os.ReadFile("notes.txt")
+	file, err := os.Open("notes.txt")
 	if err != nil {
-		log.Fatal("An error occured while opening this file")
+		log.Fatal("Error opening file: ", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	lineNumber := 1
+	for scanner.Scan() {
+		lineText := scanner.Text()
+		if strings.Contains(lineText, arg) {
+			fmt.Printf("Found '%s' on line %d\n", arg, lineNumber)
+		}
+		lineNumber++
 	}
 
-	fileContent := string(file)
-
-	if strings.Contains(fileContent, arg) {
-		fmt.Println("Word found in file")
-	} else {
-		fmt.Println("Word not found in file")
+	if err := scanner.Err(); err != nil {
+		log.Fatal("Error scanning file: ", err)
 	}
 }
