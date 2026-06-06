@@ -1,7 +1,17 @@
 package main
 
-import "github.com/blvckbill/lens.git/search"
+import (
+	"fmt"
+
+	"github.com/blvckbill/lens.git/search"
+)
 
 func main() {
-	search.Search_file("large")
+	found := search.Search_file("notes.txt", "large")
+	if found {
+		fmt.Println("found a match")
+	} else {
+		fmt.Println("No found matches")
+	}
+
 }
