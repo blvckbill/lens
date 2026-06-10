@@ -7,11 +7,8 @@ import (
 )
 
 func main() {
-	found := search.Search_file("notes.txt", "large")
-	if found {
-		fmt.Println("found a match")
-	} else {
-		fmt.Println("No found matches")
+	indexer := search.Indexer("notes.txt")
+	for word, docs := range indexer {
+		fmt.Printf("%s → %v\n", word, docs)
 	}
-
 }

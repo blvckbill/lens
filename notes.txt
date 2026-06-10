@@ -1,5 +1,6 @@
-large
+A large dog runs fast
 small
+The quick brown fox, jumps over the lazy dog!
 sweet
 fine
 big
