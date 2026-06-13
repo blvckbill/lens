@@ -8,37 +8,38 @@ import (
 	"unicode"
 )
 
-func Indexer(documents ...string) map[string][]string {
-	var indexer = make(map[string][]string, 10)
+func Indexer(documents ...string) map[string]map[string][]int {
+	var indexer = make(map[string][]map[string][]int, 10)
 	for _, document := range documents {
 		file := openDocument(document)
 
 		scanner := bufio.NewScanner(file)
+		scanner.Split(bufio.ScanWords)
 
-		
+		lineNumber := 1
 		for scanner.Scan() {
-			var cleanedText string
+			var b strings.Builder
 			text := scanner.Text()
 			for _, t := range text {
 				if unicode.IsPunct(t) {
 					continue
 				} else {
-					cleanedText += string(t)
+					b.WriteString(string(t))
 				}
 			}
-			normalizedLine := strings.ToLower(cleanedText)
-			words := strings.SplitSeq(normalizedLine, " ")
-			for word := range words {
-				alreadyExists := false
-				for _, doc := range indexer[word] {
-					if doc == document {
-						alreadyExists = true
-					}
-					
+			word := strings.ToLower(b.String())
+			alreadyExists := false
+			var docMap = make(map[string][]int)
+			for doc := range indexer[word] {
+				if document == doc {
+					alreadyExists = true
 				}
-				if !alreadyExists {
-					indexer[word] = append(indexer[word], document)
-				}
+			}
+			if alreadyExists {
+				docMap[document] = append(docMap[document], lineNumber)
+			} else {
+				docMap[document] = append(docMap[document], lineNumber)
+				indexer[word] = docMap
 			}
 		}
 		file.Close()
@@ -46,12 +47,11 @@ func Indexer(documents ...string) map[string][]string {
 	return indexer
 }
 
-func openDocument(document string) *os.File{
+func openDocument(document string) *os.File {
 	file, err := os.Open(document)
 	if err != nil {
 		log.Fatalf("Error reading from document %s", document)
 	}
-
 
 	return file
 }
