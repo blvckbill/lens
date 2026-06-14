@@ -8,15 +8,14 @@ import (
 	"unicode"
 )
 
-func Indexer(documents ...string) map[string]map[string][]int {
-	var indexer = make(map[string][]map[string][]int, 10)
+func Indexer(documents ...string) map[string]map[string]int {
+	var indexer = make(map[string]map[string]int, 10)
 	for _, document := range documents {
 		file := openDocument(document)
 
 		scanner := bufio.NewScanner(file)
 		scanner.Split(bufio.ScanWords)
 
-		lineNumber := 1
 		for scanner.Scan() {
 			var b strings.Builder
 			text := scanner.Text()
@@ -28,19 +27,12 @@ func Indexer(documents ...string) map[string]map[string][]int {
 				}
 			}
 			word := strings.ToLower(b.String())
-			alreadyExists := false
-			var docMap = make(map[string][]int)
-			for doc := range indexer[word] {
-				if document == doc {
-					alreadyExists = true
-				}
+
+			if indexer[word] == nil {
+				indexer[word] = make(map[string]int)
 			}
-			if alreadyExists {
-				docMap[document] = append(docMap[document], lineNumber)
-			} else {
-				docMap[document] = append(docMap[document], lineNumber)
-				indexer[word] = docMap
-			}
+			indexer[word][document] += 1
+
 		}
 		file.Close()
 	}
