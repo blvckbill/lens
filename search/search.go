@@ -2,31 +2,25 @@ package search
 
 import (
 	"bufio"
-	"fmt"
 	"log"
 	"os"
 	"strings"
 )
 
-func Search_file(arg string) {
-	file, err := os.Open("notes.txt")
+func Search_file(document string, word string) bool {
+	file, err := os.Open(document)
 	if err != nil {
-		log.Fatal("Error opening file: ", err)
+		log.Fatal("Error reading from file")
 	}
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
 
-	lineNumber := 1
 	for scanner.Scan() {
-		lineText := scanner.Text()
-		if strings.Contains(lineText, arg) {
-			fmt.Printf("Found '%s' on line %d\n", arg, lineNumber)
+		read_text := strings.ToLower(scanner.Text())
+		if strings.Contains(read_text, word) {
+			return true
 		}
-		lineNumber++
 	}
-
-	if err := scanner.Err(); err != nil {
-		log.Fatal("Error scanning file: ", err)
-	}
+	return false
 }

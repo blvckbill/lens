@@ -1,7 +1,14 @@
 package main
 
-import "github.com/blvckbill/lens.git/search"
+import (
+	"fmt"
+
+	"github.com/blvckbill/lens.git/search"
+)
 
 func main() {
-	search.Search_file("large")
+	indexer := search.Indexer("notes.txt")
+	for word, docs := range indexer {
+		fmt.Printf("%s → %v\n", word, docs)
+	}
 }
