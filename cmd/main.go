@@ -7,7 +7,9 @@ import (
 )
 
 func main() {
-	indexer := search.Indexer("notes.txt")
+	r := search.NewRegistry()
+
+	indexer := r.InvertedIndex("./docs")
 	for word, docs := range indexer {
 		fmt.Printf("%s → %v\n", word, docs)
 	}
