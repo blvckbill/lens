@@ -101,6 +101,7 @@ func (idx *Index) Tokenize(path string, documents ...string) []Token {
 	return tokens
 }
 
+// SortTokens sorts the tokens in ascending order by word and then by document ID.
 func (idx *Index) SortTokens(tokens []Token) []Token {
 	slices.SortFunc(tokens, func(a, b Token) int {
 		if n := strings.Compare(a.Word, b.Word); n != 0 {
