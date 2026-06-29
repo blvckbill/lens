@@ -22,19 +22,13 @@ func (idx *Index) PostingsLookup(query_list []string) [][]int {
 	return postings
 }
 
-func getIntersection(postings [][]int) []int {
+func IntersectTwoLists(list1, list2 []int) []int {
 	var intersection []int
-	list1 := postings[0]
-	list2 := postings[1]
 
 	ptr1 := 0
 	ptr2 := 0
 
-	if len(list2) < len(list1) {
-		list1, list2 = list2, list1
-	}
-
-	for ptr1 < len(list1) {
+	for ptr1 < len(list1) && ptr2 < len(list2) {
 		if list1[ptr1] == list2[ptr2] {
 			intersection = append(intersection, list1[ptr1])
 			ptr1++
@@ -48,7 +42,22 @@ func getIntersection(postings [][]int) []int {
 	return intersection
 }
 
-func (idx *Index) resolveDocument(doc_list []int) []string {
+func IntersectManyLists(postings [][]int) []int {
+	if len(postings) == 0 {
+		return nil
+	}
+
+	if len(postings) == 1 {
+		return postings[0]
+	}
+	current := postings[0]
+	for i := 1; i < len(postings); i++ {
+		current = IntersectTwoLists(current, postings[i])
+	}
+	return current
+}
+
+func (idx *Index) ResolveDocument(doc_list []int) []string {
 	var documents []string
 	for _, docId := range doc_list {
 		documents = append(documents, idx.IdToDoc[docId])
