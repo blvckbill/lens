@@ -7,9 +7,9 @@ import (
 )
 
 func main() {
-	r := search.NewRegistry()
+	idx := search.NewIndex()
 
-	indexer := r.InvertedIndex("./docs")
+	indexer := idx.BuildFromDir("./docs")
 	for word, docs := range indexer {
 		fmt.Printf("%s → %v\n", word, docs)
 	}

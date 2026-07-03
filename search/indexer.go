@@ -11,65 +11,64 @@ import (
 )
 
 type Postings struct {
-	docFreq int
-	docIds  []int
+	DocFreq int
+	DocIds  []int
 }
 
-type Registry struct {
-	docs     []string
-	docToID  map[string]int
-	idTodoc  map[int]string
-	postings map[string]Postings
-	nextID   int
+type Token struct {
+	Word  string
+	DocId int
 }
 
-type WordIndex struct {
-	word  string
-	docId int
+type Index struct {
+	Docs     []string
+	DocToID  map[string]int
+	IdToDoc  map[int]string
+	Postings map[string]Postings
+	NextID   int
 }
 
-func NewRegistry() *Registry {
-	return &Registry{
-		docs:     make([]string, 0),
-		docToID:  make(map[string]int),
-		idTodoc:  make(map[int]string),
-		postings: make(map[string]Postings),
-		nextID:   1,
+func NewIndex() *Index {
+	return &Index{
+		Docs:     make([]string, 0),
+		DocToID:  make(map[string]int),
+		IdToDoc:  make(map[int]string),
+		Postings: make(map[string]Postings),
+		NextID:   1,
 	}
 }
 
-func (r *Registry) InvertedIndex(path string) map[string]Postings {
+func (idx *Index) BuildFromDir(path string) map[string]Postings {
 	files, err := os.ReadDir(path)
 	if err != nil {
-		log.Printf("Error occured while trying to locate %s, path not found", path)
+		log.Printf("Error occurred while trying to locate %s, path not found", path)
 	}
 	for i := range len(files) {
-		r.docs = append(r.docs, files[i].Name())
+		idx.Docs = append(idx.Docs, files[i].Name())
 	}
 
-	wordIndex := r.PairWordsAndDocId(path, r.docs...)
-	sortedPairs := r.SortPairsByWord(wordIndex)
-	postingsList := r.TermDictionary(sortedPairs)
+	tokens := idx.Tokenize(path, idx.Docs...)
+	sortedTokens := idx.SortTokens(tokens)
+	postingsList := idx.CompilePostings(sortedTokens)
 
 	return postingsList
 }
 
-func (r *Registry) AddDocument(filename string) int {
-	_, ok := r.docToID[filename]
+func (idx *Index) AddDocument(filename string) int {
+	_, ok := idx.DocToID[filename]
 	if !ok {
-		r.docToID[filename] = r.nextID
-		r.idTodoc[r.nextID] = filename
-		r.nextID++
+		idx.DocToID[filename] = idx.NextID
+		idx.IdToDoc[idx.NextID] = filename
+		idx.NextID++
 	}
-	return r.docToID[filename]
+	return idx.DocToID[filename]
 }
 
-func (r *Registry) PairWordsAndDocId(path string, documents ...string) []WordIndex {
-	var pairs []WordIndex
+func (idx *Index) Tokenize(path string, documents ...string) []Token {
+	var tokens []Token
 	for _, document := range documents {
 		file := openDocument(path, document)
-		// map doc to id and return the id
-		docId := r.AddDocument(file.Name())
+		docId := idx.AddDocument(file.Name())
 
 		scanner := bufio.NewScanner(file)
 		scanner.Split(bufio.ScanWords)
@@ -90,54 +89,51 @@ func (r *Registry) PairWordsAndDocId(path string, documents ...string) []WordInd
 				continue
 			}
 
-			// map word to doc id
-			w := WordIndex{
-				word:  word,
-				docId: docId,
+			tkn := Token{
+				Word:  word,
+				DocId: docId,
 			}
 
-			// append the pair (word, docid) to slice pairs
-			pairs = append(pairs, w)
+			tokens = append(tokens, tkn)
 		}
 		file.Close()
 	}
-	// return list of all pairs
-	return pairs
+	return tokens
 }
 
-func (r *Registry) SortPairsByWord(pairs []WordIndex) []WordIndex {
-	slices.SortFunc(pairs, func(a, b WordIndex) int {
-		if n := strings.Compare(a.word, b.word); n != 0 {
+func (idx *Index) SortTokens(tokens []Token) []Token {
+	slices.SortFunc(tokens, func(a, b Token) int {
+		if n := strings.Compare(a.Word, b.Word); n != 0 {
 			return n
 		}
-		return cmp.Compare(a.docId, b.docId)
+		return cmp.Compare(a.DocId, b.DocId)
 	})
-	return pairs
+	return tokens
 }
 
-func (r *Registry) TermDictionary(sorted_pairs []WordIndex) map[string]Postings {
-	for i := range len(sorted_pairs) {
-		word := sorted_pairs[i].word
-		docId := sorted_pairs[i].docId
+func (idx *Index) CompilePostings(sortedTokens []Token) map[string]Postings {
+	for i := range len(sortedTokens) {
+		word := sortedTokens[i].Word
+		docId := sortedTokens[i].DocId
 
-		v, ok := r.postings[word]
+		v, ok := idx.Postings[word]
 
 		if !ok {
-			r.postings[word] = Postings{
-				docFreq: 1,
-				docIds:  []int{docId},
+			idx.Postings[word] = Postings{
+				DocFreq: 1,
+				DocIds:  []int{docId},
 			}
 		} else {
-			if v.docIds[len(v.docIds)-1] == docId {
+			if v.DocIds[len(v.DocIds)-1] == docId {
 				continue
 			}
-			r.postings[word] = Postings{
-				docFreq: v.docFreq + 1,
-				docIds:  append(v.docIds, docId),
+			idx.Postings[word] = Postings{
+				DocFreq: v.DocFreq + 1,
+				DocIds:  append(v.DocIds, docId),
 			}
 		}
 	}
-	return r.postings
+	return idx.Postings
 }
 
 func openDocument(path, document string) *os.File {
