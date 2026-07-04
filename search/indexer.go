@@ -28,6 +28,10 @@ type Index struct {
 	NextID   int
 }
 
+/*
+*
+Create a new index, which is a data structure that maps words to the documents they appear in.
+*/
 func NewIndex() *Index {
 	return &Index{
 		Docs:     make([]string, 0),
@@ -38,6 +42,9 @@ func NewIndex() *Index {
 	}
 }
 
+/**	Receive the path to the directory containing the documents,
+*	and build the index from the documents in that directory.
+ */
 func (idx *Index) BuildFromDir(path string) map[string]Postings {
 	files, err := os.ReadDir(path)
 	if err != nil {
@@ -54,6 +61,10 @@ func (idx *Index) BuildFromDir(path string) map[string]Postings {
 	return postingsList
 }
 
+/*
+* map document to an integer ID, if the document is already mapped,
+return the existing ID, otherwise assign a new ID and return it.
+*/
 func (idx *Index) AddDocument(filename string) int {
 	_, ok := idx.DocToID[filename]
 	if !ok {
@@ -64,6 +75,10 @@ func (idx *Index) AddDocument(filename string) int {
 	return idx.DocToID[filename]
 }
 
+/*
+*
+loop through the documents, open each document, read its content, and tokenize the words in the document.
+*/
 func (idx *Index) Tokenize(path string, documents ...string) []Token {
 	var tokens []Token
 	for _, document := range documents {
@@ -101,6 +116,11 @@ func (idx *Index) Tokenize(path string, documents ...string) []Token {
 	return tokens
 }
 
+/*
+*
+Loop through the tokenized documents, which maps word to document ID
+and sorts it so same words are grouped together.
+*/
 func (idx *Index) SortTokens(tokens []Token) []Token {
 	slices.SortFunc(tokens, func(a, b Token) int {
 		if n := strings.Compare(a.Word, b.Word); n != 0 {
@@ -111,6 +131,11 @@ func (idx *Index) SortTokens(tokens []Token) []Token {
 	return tokens
 }
 
+/*
+*
+Loop through the sorted tokens, and build the postings list,
+which maps each word to the number of times it appears globally and list of its document IDs.
+*/
 func (idx *Index) CompilePostings(sortedTokens []Token) map[string]Postings {
 	for i := range len(sortedTokens) {
 		word := sortedTokens[i].Word
@@ -136,6 +161,10 @@ func (idx *Index) CompilePostings(sortedTokens []Token) map[string]Postings {
 	return idx.Postings
 }
 
+/*
+*
+Open the document in the specified path and return a file pointer to it.
+*/
 func openDocument(path, document string) *os.File {
 	file, err := os.OpenInRoot(path, document)
 	if err != nil {
