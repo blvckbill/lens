@@ -10,9 +10,14 @@ import (
 	"unicode"
 )
 
+type TermFreq struct {
+	TermFreq int
+	DocId int
+}
+
 type Postings struct {
 	DocFreq int
-	DocIds  []int
+	DocTerm  []TermFreq
 }
 
 type Token struct {
@@ -143,18 +148,27 @@ func (idx *Index) CompilePostings(sortedTokens []Token) map[string]Postings {
 
 		v, ok := idx.Postings[word]
 
+		tf := TermFreq{
+			TermFreq: 1,
+			DocId: docId,
+		}
+
 		if !ok {
 			idx.Postings[word] = Postings{
 				DocFreq: 1,
-				DocIds:  []int{docId},
+				DocTerm:  []TermFreq{tf},
 			}
 		} else {
-			if v.DocIds[len(v.DocIds)-1] == docId {
+			// if last appended term frequency struct has same doc id, increment term frequency
+			if v.DocTerm[len(v.DocTerm)-1].DocId == docId {
+				v.DocTerm[len(v.DocTerm)-1].TermFreq++
+				idx.Postings[word] = v
 				continue
 			}
+			// if the word is found in the dictionary, append the term freq and doc id and then increment the doc freq
 			idx.Postings[word] = Postings{
 				DocFreq: v.DocFreq + 1,
-				DocIds:  append(v.DocIds, docId),
+				DocTerm:  append(v.DocTerm, tf),
 			}
 		}
 	}

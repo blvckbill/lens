@@ -1,9 +1,18 @@
 package search
 
 import (
+	"cmp"
+	"fmt"
 	"log"
+	"math"
+	"slices"
 	"strings"
 )
+
+type ScoreMap struct {
+	Score float64
+	DocId int
+}
 
 /**
 * Run query by parsing the input words into a list then get their documentIds and
@@ -11,9 +20,12 @@ import (
  */
 func (idx *Index) Query(queryString string) []string {
 	parsedWords := Parser(queryString)
-	documentIds := idx.PostingsLookup(parsedWords)
-	intersection := IntersectManyLists(documentIds)
-	documents := idx.ResolveDocument(intersection)
+	scores := idx.BuildScore(parsedWords)
+	sortedScores := idx.SortScores(scores)
+	documents := idx.ResolveDocument(sortedScores)
+	for _, s := range sortedScores {
+		fmt.Printf("doc: %s score: %.4f\n", idx.IdToDoc[s.DocId], s.Score)
+	}
 
 	return documents
 }
@@ -30,18 +42,18 @@ func Parser(query_string string) []string {
 * If the word is not found in the index, it logs a message and breaks out of the loop.
 * Returns a list of doc ids for each word in the query.
  */
-func (idx *Index) PostingsLookup(query_list []string) [][]int {
-	var postings [][]int
-	for _, w := range query_list {
-		v, ok := idx.Postings[w]
-		if !ok {
-			log.Printf("No occurence of %s found in documents", w)
-			break
-		}
-		postings = append(postings, v.DocIds)
-	}
-	return postings
-}
+// func (idx *Index) PostingsLookup(query_list []string) [][]int {
+// 	var postings [][]int
+// 	for _, w := range query_list {
+// 		v, ok := idx.Postings[w]
+// 		if !ok {
+// 			log.Printf("No occurence of %s found in documents", w)
+// 			break
+// 		}
+// 		postings = append(postings, v.DocIds)
+// 	}
+// 	return postings
+// }
 
 /**
 * Lopps throught the two list of docIds and returns the intersection of the two lists.
@@ -87,12 +99,63 @@ func IntersectManyLists(postings [][]int) []int {
 }
 
 /**
+* Builds a list of scores for each document based on the query terms.
+ */
+func (idx *Index) BuildScore(query_list []string) []ScoreMap {
+	NumberOfDocs := len(idx.Docs)
+	scores := make(map[int]float64)
+	var scoreMap []ScoreMap
+	for _, term := range query_list {
+		v, ok := idx.Postings[term]
+		if !ok {
+			log.Printf("No occurence of %s found in documents", term)
+			break
+		}
+		// for the terms in query list, calculate the score of the documents they can be found using N and docfreq
+		docFreq := v.DocFreq
+		for _, dt := range v.DocTerm {
+			scores[dt.DocId] += CalculateScore(dt.TermFreq, NumberOfDocs, docFreq)
+		}
+	}
+	for docId, score := range scores {
+		s := ScoreMap{
+			Score: score,
+			DocId: docId,
+		}
+		scoreMap = append(scoreMap, s)
+	}
+	return scoreMap
+}
+
+/**
+* Calculates the score of a document based on the term frequency, number of documents, and document frequency.
+* The score is calculated using the formula: score = tf * log10(N / df)
+ */
+func CalculateScore(tf, N, df int) float64 {
+	invertedDocFreq := float64(N) / float64(df)
+	return float64(tf) * math.Log10(invertedDocFreq)
+}
+
+/**
+* Sorts the list of scores in descending order based on the score value.
+ */
+func (idx *Index) SortScores(scores []ScoreMap) []ScoreMap {
+	slices.SortFunc(scores, func(a, b ScoreMap) int {
+		if n := cmp.Compare(b.Score, a.Score); n != 0 {
+			return n
+		}
+		return cmp.Compare(a.DocId, b.DocId)
+	})
+	return scores
+}
+
+/**
 * Takes a list of document IDs and returns the corresponding document names.
  */
-func (idx *Index) ResolveDocument(doc_list []int) []string {
+func (idx *Index) ResolveDocument(doc_list []ScoreMap) []string {
 	var documents []string
-	for _, docId := range doc_list {
-		documents = append(documents, idx.IdToDoc[docId])
+	for _, scores := range doc_list {
+		documents = append(documents, idx.IdToDoc[scores.DocId])
 	}
 	return documents
 }
