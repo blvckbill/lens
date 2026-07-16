@@ -24,7 +24,7 @@ func (idx *Index) Query(queryString string) []string {
 	sortedScores := idx.SortScores(scores)
 	documents := idx.ResolveDocument(sortedScores)
 	for _, s := range sortedScores {
-		fmt.Printf("doc: %s score: %.4f\n", idx.IdToDoc[s.DocId], s.Score)
+		fmt.Printf("doc: %s score: %.4f\n", idx.IDToDocument[s.DocId], s.Score)
 	}
 
 	return documents
@@ -45,12 +45,12 @@ func Parser(query_string string) []string {
 // func (idx *Index) PostingsLookup(query_list []string) [][]int {
 // 	var postings [][]int
 // 	for _, w := range query_list {
-// 		v, ok := idx.Postings[w]
+// 		v, ok := idx.InvertedIndex[w]
 // 		if !ok {
 // 			log.Printf("No occurence of %s found in documents", w)
 // 			break
 // 		}
-// 		postings = append(postings, v.DocIds)
+// 		postings = append(postings, v.Postings)
 // 	}
 // 	return postings
 // }
@@ -102,19 +102,19 @@ func IntersectManyLists(postings [][]int) []int {
 * Builds a list of scores for each document based on the query terms.
  */
 func (idx *Index) BuildScore(query_list []string) []ScoreMap {
-	NumberOfDocs := len(idx.Docs)
+	NumberOfDocs := len(idx.Documents)
 	scores := make(map[int]float64)
 	var scoreMap []ScoreMap
 	for _, term := range query_list {
-		v, ok := idx.Postings[term]
+		v, ok := idx.InvertedIndex[term]
 		if !ok {
 			log.Printf("No occurence of %s found in documents", term)
 			break
 		}
 		// for the terms in query list, calculate the score of the documents they can be found using N and docfreq
-		docFreq := v.DocFreq
-		for _, dt := range v.DocTerm {
-			scores[dt.DocId] += CalculateScore(dt.TermFreq, NumberOfDocs, docFreq)
+		docFreq := v.DocumentFrequency
+		for _, dt := range v.Postings {
+			scores[dt.DocID] += CalculateScore(len(dt.Positions), NumberOfDocs, docFreq)
 		}
 	}
 	for docId, score := range scores {
@@ -155,7 +155,7 @@ func (idx *Index) SortScores(scores []ScoreMap) []ScoreMap {
 func (idx *Index) ResolveDocument(doc_list []ScoreMap) []string {
 	var documents []string
 	for _, scores := range doc_list {
-		documents = append(documents, idx.IdToDoc[scores.DocId])
+		documents = append(documents, idx.IDToDocument[scores.DocId])
 	}
 	return documents
 }
