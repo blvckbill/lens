@@ -10,179 +10,181 @@ import (
 	"unicode"
 )
 
-type TermFreq struct {
-	TermFreq int
-	DocId int
-}
-
-type Postings struct {
-	DocFreq int
-	DocTerm  []TermFreq
-}
-
+// Token represents a normalized word extracted from a document.
 type Token struct {
-	Word  string
-	DocId int
+	Word     string
+	DocID    int
+	Position int
 }
 
+// Posting stores information about a term within a single document.
+type Posting struct {
+	DocID     int
+	Positions []int
+}
+
+// TermInfo stores all postings for a term.
+type TermInfo struct {
+	DocumentFrequency int
+	Postings          []Posting
+}
+
+// Index represents an in-memory positional inverted index.
 type Index struct {
-	Docs     []string
-	DocToID  map[string]int
-	IdToDoc  map[int]string
-	Postings map[string]Postings
-	NextID   int
+	Documents      []string
+	DocumentIDs    map[string]int
+	IDToDocument   map[int]string
+	InvertedIndex  map[string]TermInfo
+	NextDocumentID int
 }
 
-/*
-*
-Create a new index, which is a data structure that maps words to the documents they appear in.
-*/
+// NewIndex creates an empty index.
 func NewIndex() *Index {
 	return &Index{
-		Docs:     make([]string, 0),
-		DocToID:  make(map[string]int),
-		IdToDoc:  make(map[int]string),
-		Postings: make(map[string]Postings),
-		NextID:   1,
+		Documents:      make([]string, 0),
+		DocumentIDs:    make(map[string]int),
+		IDToDocument:   make(map[int]string),
+		InvertedIndex:  make(map[string]TermInfo),
+		NextDocumentID: 1,
 	}
 }
 
-/**	Receive the path to the directory containing the documents,
-*	and build the index from the documents in that directory.
- */
-func (idx *Index) BuildFromDir(path string) map[string]Postings {
+// BuildFromDir indexes every document in the supplied directory.
+func (idx *Index) BuildFromDir(path string) map[string]TermInfo {
 	files, err := os.ReadDir(path)
 	if err != nil {
-		log.Printf("Error occurred while trying to locate %s, path not found", path)
-	}
-	for i := range len(files) {
-		idx.Docs = append(idx.Docs, files[i].Name())
+		log.Printf("unable to read directory %q", path)
+		return nil
 	}
 
-	tokens := idx.Tokenize(path, idx.Docs...)
+	for _, file := range files {
+		idx.Documents = append(idx.Documents, file.Name())
+	}
+
+	tokens := idx.Tokenize(path, idx.Documents...)
 	sortedTokens := idx.SortTokens(tokens)
-	postingsList := idx.CompilePostings(sortedTokens)
 
-	return postingsList
+	return idx.CompilePostings(sortedTokens)
 }
 
-/*
-* map document to an integer ID, if the document is already mapped,
-return the existing ID, otherwise assign a new ID and return it.
-*/
+// AddDocument assigns a unique ID to a document.
 func (idx *Index) AddDocument(filename string) int {
-	_, ok := idx.DocToID[filename]
-	if !ok {
-		idx.DocToID[filename] = idx.NextID
-		idx.IdToDoc[idx.NextID] = filename
-		idx.NextID++
+	if id, exists := idx.DocumentIDs[filename]; exists {
+		return id
 	}
-	return idx.DocToID[filename]
+
+	id := idx.NextDocumentID
+
+	idx.DocumentIDs[filename] = id
+	idx.IDToDocument[id] = filename
+	idx.NextDocumentID++
+
+	return id
 }
 
-/*
-*
-loop through the documents, open each document, read its content, and tokenize the words in the document.
-*/
+// Tokenize converts each document into normalized tokens.
 func (idx *Index) Tokenize(path string, documents ...string) []Token {
 	var tokens []Token
+
 	for _, document := range documents {
 		file := openDocument(path, document)
-		docId := idx.AddDocument(file.Name())
+		docID := idx.AddDocument(file.Name())
 
 		scanner := bufio.NewScanner(file)
 		scanner.Split(bufio.ScanWords)
 
-		for scanner.Scan() {
-			var b strings.Builder
-			text := scanner.Text()
-			for _, t := range text {
-				if unicode.IsPunct(t) {
-					continue
-				} else {
-					b.WriteString(string(t))
-				}
-			}
-			word := strings.ToLower(b.String())
+		position := 0
 
+		for scanner.Scan() {
+			var builder strings.Builder
+
+			for _, r := range scanner.Text() {
+				if unicode.IsPunct(r) {
+					continue
+				}
+				builder.WriteRune(unicode.ToLower(r))
+			}
+
+			word := builder.String()
 			if word == "" {
 				continue
 			}
 
-			tkn := Token{
-				Word:  word,
-				DocId: docId,
-			}
+			tokens = append(tokens, Token{
+				Word:     word,
+				DocID:    docID,
+				Position: position,
+			})
 
-			tokens = append(tokens, tkn)
+			position++
 		}
+
 		file.Close()
 	}
+
 	return tokens
 }
 
-/*
-*
-Loop through the tokenized documents, which maps word to document ID
-and sorts it so same words are grouped together.
-*/
+// SortTokens sorts tokens by term then by document ID then lastly by position.
 func (idx *Index) SortTokens(tokens []Token) []Token {
 	slices.SortFunc(tokens, func(a, b Token) int {
 		if n := strings.Compare(a.Word, b.Word); n != 0 {
 			return n
 		}
-		return cmp.Compare(a.DocId, b.DocId)
+
+		if n := cmp.Compare(a.DocID, b.DocID); n != 0 {
+			return n
+		}
+
+		return cmp.Compare(a.Position, b.Position)
 	})
+
 	return tokens
 }
 
-/*
-*
-Loop through the sorted tokens, and build the postings list,
-which maps each word to the number of times it appears globally and list of its document IDs.
-*/
-func (idx *Index) CompilePostings(sortedTokens []Token) map[string]Postings {
-	for i := range len(sortedTokens) {
-		word := sortedTokens[i].Word
-		docId := sortedTokens[i].DocId
+// CompilePostings builds the positional inverted index.
+func (idx *Index) CompilePostings(tokens []Token) map[string]TermInfo {
+	for _, token := range tokens {
+		term := token.Word
 
-		v, ok := idx.Postings[word]
+		entry, exists := idx.InvertedIndex[term]
 
-		tf := TermFreq{
-			TermFreq: 1,
-			DocId: docId,
+		if !exists {
+			idx.InvertedIndex[term] = TermInfo{
+				DocumentFrequency: 1,
+				Postings: []Posting{
+					{
+						DocID:     token.DocID,
+						Positions: []int{token.Position},
+					},
+				},
+			}
+			continue
 		}
 
-		if !ok {
-			idx.Postings[word] = Postings{
-				DocFreq: 1,
-				DocTerm:  []TermFreq{tf},
-			}
+		lastPosting := &entry.Postings[len(entry.Postings)-1]
+
+		if lastPosting.DocID == token.DocID {
+			lastPosting.Positions = append(lastPosting.Positions, token.Position)
 		} else {
-			// if last appended term frequency struct has same doc id, increment term frequency
-			if v.DocTerm[len(v.DocTerm)-1].DocId == docId {
-				v.DocTerm[len(v.DocTerm)-1].TermFreq++
-				idx.Postings[word] = v
-				continue
-			}
-			// if the word is found in the dictionary, append the term freq and doc id and then increment the doc freq
-			idx.Postings[word] = Postings{
-				DocFreq: v.DocFreq + 1,
-				DocTerm:  append(v.DocTerm, tf),
-			}
+			entry.DocumentFrequency++
+			entry.Postings = append(entry.Postings, Posting{
+				DocID:     token.DocID,
+				Positions: []int{token.Position},
+			})
 		}
+
+		idx.InvertedIndex[term] = entry
 	}
-	return idx.Postings
+
+	return idx.InvertedIndex
 }
 
-/*
-*
-Open the document in the specified path and return a file pointer to it.
-*/
+// openDocument opens a document from the collection.
 func openDocument(path, document string) *os.File {
 	file, err := os.OpenInRoot(path, document)
 	if err != nil {
-		log.Fatalf("Error reading from %s", document)
+		log.Fatalf("error opening %s", document)
 	}
 
 	return file
